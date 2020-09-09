@@ -69,6 +69,7 @@ func (redis *RedisCluster) Values(timeout int64, keys []string) ([]*Result, erro
 					"",
 					err,
 				}
+				return
 			}
 			result <- &Result{
 				id,
