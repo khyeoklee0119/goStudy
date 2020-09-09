@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/go-redis/redis/v8"
+	"github.com/go-redis/redis"
 	"sync"
 	"time"
 )
@@ -29,18 +29,18 @@ type NoSQL interface {
 }
 
 func NewRedisCluster(config Config) *RedisCluster {
-
+	address := config.Host + ":" + config.Port
 	clusterClient := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs: []string{config.Host + config.Port},
+		Addrs: []string{address},
 	})
 
 	ctx := context.Background()
 	pong, err := clusterClient.Ping(ctx).Result()
 	if err != nil {
+		fmt.Println("Failed to connect at", address)
 		panic(err)
 	}
-
-	fmt.Println(pong)
+	fmt.Println("Redis cluster", address, "connected!", pong)
 	return &RedisCluster{
 		clusterClient,
 		ctx,
@@ -52,7 +52,7 @@ type RedisCluster struct {
 	ctx           context.Context
 }
 
-func (redis *RedisCluster) Values(timeout int64, keys ...string) ([]*Result, error) {
+func (redis *RedisCluster) Values(timeout int64, keys []string) ([]*Result, error) {
 	var wg sync.WaitGroup
 	size := len(keys)
 	wg.Add(size)
@@ -66,7 +66,7 @@ func (redis *RedisCluster) Values(timeout int64, keys ...string) ([]*Result, err
 				result <- &Result{
 					id,
 					key,
-					nil,
+					"",
 					err,
 				}
 			}
@@ -78,21 +78,31 @@ func (redis *RedisCluster) Values(timeout int64, keys ...string) ([]*Result, err
 			}
 		}(id, key)
 	}
+
+	go func() {
+		wg.Wait()
+		close(result)
+	}()
+
 	results := make([]*Result, len(keys))
-	finish:=time.After(expiry)
+	t := time.After(expiry)
 	for {
 		select {
-		case r := <-result:
-			results[r.Id] = r
-		case <-finish:
-			return nil, errors.New("Time Out")
+		case r, open := <-result:
+			if open {
+				if r.err != nil {
+					return nil, errors.New("redis Query Error")
+				}
+				results[r.Id] = r
+			} else {
+				fmt.Println("completed")
+				return results, nil
+			}
+		case <-t:
+			fmt.Println("timeOut")
+			return nil, errors.New("time Out")
 		}
 	}
-	return results, nil
-}
-
-func (redis *RedisCluster) query(id int, key string, result chan *Result) {
-
 }
 
 func (redis *RedisCluster) Shutdown() {
