@@ -1,0 +1,29 @@
+name: 'pull-request'
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  
+env:
+  PROTOC_ZIP: protoc-3.7.1-linux-x86_64.zip
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    services:
+      dind:
+        image: docker:23.0-rc-dind-rootless
+        ports:
+          - 2375:2375
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version-file: go.mod
+        cache-dependency-path: go.sum
+    - name: Test with Docker
+      run: go test -v ./main_test.go
