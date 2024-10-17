@@ -11,9 +11,7 @@ env:
 
 jobs:
   integration-test:
-    runs-on: 
-      group: SelfHostedDefault
-      labels: ubuntu-22.04-medium
+    runs-on: ubuntu-latest
     services:
       dind:
         image: docker:23.0-rc-dind-rootless
@@ -28,4 +26,4 @@ jobs:
         go-version-file: barker/go.mod
         cache-dependency-path: barker/go.sum
     - name: Test with Docker
-      run: go test -v ./integration/serving/...
+      run: go test -v ./main_test.go
